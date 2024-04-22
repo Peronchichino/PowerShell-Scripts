@@ -40,7 +40,7 @@ try{
     New-SafeAttachmentPolicy -Name "Test SafeAttach Policy" `
         -Enabled $true `
         -Redirect $true `
-        -RedirectAddress "something@testlotterien.at"
+        -RedirectAddress "something@domain.at"
 
     New-SafeAttachmentRule
 
