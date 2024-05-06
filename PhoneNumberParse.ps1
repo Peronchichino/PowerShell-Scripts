@@ -6,7 +6,7 @@ function func_user_set_TeamPhoneSettings([string] $UPN){
     try{
         $user = Get-AzADUser -UserPrincipalName $UPN
 
-        $e5GroupDistinguishedName = "CN=gg_lic_O365_E5_Basis,OU=licence,OU=m365,OU=cloudservices,OU=resources,DC=office,DC=lottery,DC=co,DC=at"
+        $e5GroupDistinguishedName = "CN=,OU=,OU=,OU=,OU=,DC=,DC=,DC=,DC="
         $e5members = Get-ADGroupMember -Identity $e5GroupDistinguishedName
 
         $isMember = $e5members | Where-Object { $_.UserPrincipalName -eq $UPN }
@@ -41,8 +41,8 @@ function func_group_set_TeamPhoneSettings([string]$group){
 
         if($group){
             $groupMembers = Get-AzureADGroupMember -objectid $group 
-            $e5GroupDistinguishedName = "CN=gg_lic_O365_E5_Basis,OU=licence,OU=m365,OU=cloudservices,OU=resources,DC=office,DC=lottery,DC=co,DC=at"
-            #$e5members = Get-AzureADGroupMember -objectid "ce2f8a16-154d-451d-a99b-d34034a7acd5"
+            $e5GroupDistinguishedName = "CN=,OU=,OU=,OU=,OU=,DC=,DC=,DC=,DC="
+            #$e5members = Get-AzureADGroupMember -objectid ""
             $e5members = Get-ADGroupMember -Identity $e5GroupDistinguishedName
 
             if ($groupMembers.Count -eq 0) {
