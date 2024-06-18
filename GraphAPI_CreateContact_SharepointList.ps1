@@ -1,17 +1,38 @@
+#Connect-PnPOnline -url ""
+
+#custom compare function Compare-Object only returned null even with properties
+function CompareContacts($existCont,$newCont){
+    $properties = @(
+        "givenName","surname","emailAddresses","businessPhone","categories","CompanyName","Department","OfficeLocation"
+    )
+
+    foreach($property in $properties){
+        $existVal = $existCont.$property
+        $newVal = $newCont.$property
+
+        if($existVal -is [System.Collections.IEnumerable] -and $newVal -is [System.Collections.IEnumerable]){
+            $existVal = @($existVal) -join ","
+            $newVal = @($newVal) -join ","
+        }
+
+        if($existVal -ne $newVal){
+            return $true
+        }
+    }
+
+    return $false
+}
 
 # Benchmark start
-$benchmark = New-Object System.Diagnostics.Stopwatch
-$benchmark.Start()
+$benchmark = [System.Diagnostics.Stopwatch]::StartNew()
 
-$items = Get-PnPListItem -list "list name"
+$userUPN = ""
+
+$items = Get-PnPListItem -list ""
 
 if($items.count -eq 0){
     Write-Host "Items werent retrieved or list is emtpy"
     return
-}
-
-foreach($item in $items){
-    Write-Host $item.FieldValues
 }
 
 $itemsToExport = $items | ForEach-Object {
@@ -28,9 +49,6 @@ $itemsToExport = $items | ForEach-Object {
         OfficeLocation = $_.FieldValues.OfficeLocation
     }
 }
-
-$userUPN = "xxx" # Replace with the specific user's UPN
-$userId = "xxx"
 
 foreach ($contact in $itemsToExport) {
     $params = @{
@@ -49,11 +67,41 @@ foreach ($contact in $itemsToExport) {
         OfficeLocation = $contact.OfficeLocation
     }
 
-    # create new contact for the new user
-    New-MgUserContact -UserId $userId -BodyParameter $params
-} 
+    $existingContact = Get-MgUserContact -UserId $userUPN -Filter "emailAddresses/any(a: a/address eq '$($contact.emailAddresses)')"
+
+    if($null -eq $existingContact){
+        New-MgUserContact -UserId $userUPN -BodyParameter $params
+    } else {
+        $oldParams = @{
+            givenName = $existingContact.givenName
+            surname = $existingContact.surname
+            emailAddresses = @(
+                @{
+                    address = $existingContact.emailAddresses
+                    name = $existingContact.emailNames
+                }
+            )
+            businessPhones = @($existingContact.businessPhones)
+            categories = @($existingContact.categories)
+            CompanyName = $existingContact.CompanyName
+            Department = $existingContact.Department
+            OfficeLocation = $existingContact.OfficeLocation
+        }
+
+        $differences = CompareContacts -existCont $oldParams -newCont $params
+
+        if($differences){
+            Remove-MgUserContact -UserId $userUPN -ContactId $existingContact.Id
+            New-MgUserContact -UserId $userUPN -BodyParameter $params
+        } else {
+            Write-Host "Contact '$($contact.givenName) $($contact.surname)' already exists, contact was skipped"
+        }
+    }
+}
 
 # Benchmark stop 
 $benchmark.Stop()
+
+Write-Host "Benchmarking:`n-----------------------------"
 Write-Host "Time elapsed: "$benchmark.Elapsed
-Write-Host "Time elapsed (ms): "$benchmark.ElapsedMilliseconds
+Write-Host "Time elapsed (ms): "$benchmark.ElapsedMilliseconds"`n"
