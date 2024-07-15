@@ -12,6 +12,46 @@ function WriteLog{
     Add-content $csvLogging -value "$datetime $logString"
 }
 
+# function CompareContacts {
+#     Param (
+#         [hashtable]$existCont,
+#         [hashtable]$newCont
+#     )
+
+#     foreach ($key in $newCont.Keys) {
+#         if ($newCont[$key] -is [System.Array]) {
+#             if (-not ($newCont[$key] -join "," -eq $existCont[$key] -join ",")) {
+#                 return $true
+#             }
+#         } elseif ($newCont[$key] -ne $existCont[$key]) {
+#             return $true
+#         }
+#     }
+#     return $false
+# }
+
+function CompareContacts($existCont,$newCont){
+    $properties = @(
+        "givenName","surname","emailAddresses","businessPhone","categories","CompanyName","Department","OfficeLocation"
+    )
+
+    foreach($property in $properties){
+        $existVal = $existCont.$property
+        $newVal = $newCont.$property
+
+        if($existVal -is [System.Collections.IEnumerable] -and $newVal -is [System.Collections.IEnumerable]){
+            $existVal = @($existVal) -join ","
+            $newVal = @($newVal) -join ","
+        }
+
+        if($existVal -ne $newVal){
+            return $true
+        }
+    }
+
+    return $false
+} 
+
 $benchmark = [System.Diagnostics.Stopwatch]::StartNew()
 
 #contact folder display name 
@@ -71,7 +111,7 @@ foreach($member in $members){
         $folderContacts_Dict = @{}
 
         foreach($folderContact in $folderContacts){ #create keys
-            $key = $folderContact.businessPhones | Select-Object -First 1
+            $key = $folderContact.emailAddresses
             if($null -ne $key){
                 $folderContacts_Dict[$key] = $folderContact
             }
@@ -79,6 +119,8 @@ foreach($member in $members){
     }
 
     foreach($contact in $itemsToExport){
+        $benchmark_cont = [System.Diagnostics.Stopwatch]::StartNew()
+
         $params = @{
             givenName = $contact.givenName
             surname = $contact.surname
@@ -95,7 +137,7 @@ foreach($member in $members){
             OfficeLocation = $contact.OfficeLocation
         }
 
-        $key = $contact.businessPhones | Select-Object -First 1
+        $key = $contact.emailAddresses | Select-Object -First 1
         $existingContact = $folderContacts_Dict[$key]
 
         if($null -ne $existingContact){
@@ -115,30 +157,51 @@ foreach($member in $members){
                 OfficeLocation = $existingContact.OfficeLocation
             }
 
-            $update = $false
-            foreach($k in $params.Keys){
-                if($params[$k] -is [System.Array]){
-                    if(-not ($params[$k] -join "," -eq $oldParams[$k] -join ",")){
-                        $update = $true
-                        break
-                    }
-                } elseif ($params[$k] -ne $oldParams[$k]){
-                    $update = $true
-                    break
-                }
-            }
+            # $update = $false
+            # foreach($k in $params.Keys){
+            #     if($params[$k] -is [System.Array]){
+            #         if(-not ($params[$k] -join "," -eq $oldParams[$k] -join ",")){
+            #             $update = $true
+            #             break
+            #         }
+            #     } elseif ($params[$k] -ne $oldParams[$k]){
+            #         $update = $true
+            #         break
+            #     }
 
-            if($update){
+            # }
+
+            # if($update){
+            #     Remove-MgUserContactFolderContact -userid $memberId -ContactFolderId $folderId -ContactId $existingContact.Id
+            #     WriteLog('[CMD] Deleted changed contact')
+            #     New-MgUserContactFolderContact -userid $memberId -ContactFolderId $folderId -BodyParameter $params
+            #     # Update-MgUserContactFolderContact -userid $memberId -ContactFolderId $folderId -ContactId $existingContact.id -BodyParameter $params
+            #     WriteLog('[CMD] Updated contact in folder')
+            # } else {
+            #     WriteLog('[INFO] Contact exists and is up to date')
+            # }
+
+
+            $differences = CompareContacts -existCont $oldParams -newCont $params
+
+            if($differences){
                 Remove-MgUserContactFolderContact -userid $memberId -ContactFolderId $folderId -ContactId $existingContact.Id
-                Start-Sleep -Seconds 0.5
+                WriteLog('[CMD] Deleted changed contact')
                 New-MgUserContactFolderContact -userid $memberId -ContactFolderId $folderId -BodyParameter $params
                 WriteLog('[CMD] Updated contact in folder')
             } else {
                 WriteLog('[INFO] Contact exists and is up to date')
             }
+
         } else {
             New-MgUserContactFolderContact -userid $memberId -ContactFolderId $folderId -BodyParameter $params
+            WriteLog('[CMD] Contact created')
         }
+
+        $benchmark_cont.Stop()
+
+        $time_cont = "[Contact Benchmark] $($benchmark_cont.ElapsedMilliseconds) ms"
+        WriteLog($time_cont)
     }
     
 }
