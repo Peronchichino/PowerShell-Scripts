@@ -1,7 +1,3 @@
-# $thumb = "xxx"
-# Connect-AzureAD -TenantId xxx -ApplicationId  xxx -CertificateThumbprint $thumb
-# Connect-MgGraph -TenantId xxx -ClientID xxx -CertificateThumbprint $thumb
-# Connect-PnPOnline -url "xxx"
 
 function WriteLog{    
     Param ([string]$logString)
