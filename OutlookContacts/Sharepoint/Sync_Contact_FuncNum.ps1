@@ -1,7 +1,4 @@
-# $thumb = "xxx"
-# Connect-AzureAD -TenantId xxx -ApplicationId  xxx -CertificateThumbprint $thumb
-# Connect-MgGraph -TenantId xxx -ClientID xxx -CertificateThumbprint $thumb
-# Connect-PnPOnline -url "xxx"
+
 
 function WriteLog{    
     Param ([string]$logString)
@@ -16,18 +13,18 @@ $benchmark = [System.Diagnostics.Stopwatch]::StartNew()
 #init folderId variable
 $folderId
 
-$groupId = "xxx"
+$groupId = "x"
 #$group = Get-AzureADGroup -Filter "ObjectId eq '$groupId'"
 
 $bla = @("Buchmayer Lukas") 
 $members = Get-AzureADGroupMember -ObjectId $groupId | Where-Object { $_.DisplayName -in $bla }
 #$members = Get-AzureADGroupMember -ObjectId $groupId
 
-$csvLogging = "C:\LOG_SyncContact_FuncNum.csv"
+$csvLogging = "x"
 
-$yesterday = (Get-Date).AddDays(-1)
-$query = "<View><Query><Where><Geq><FieldRef Name='Modified'/><Value Type='DateTime'>$($yesterday.ToString("yyyy-MM-ddTHH:mm:ssZ"))</Value></Geq></Where></Query></View>"
-$items = Get-PnPListItem -list "TestContacts" -Query $query | Select-Object -Unique
+# $yesterday = (Get-Date).AddDays(-1)
+# $query = "<View><Query><Where><Geq><FieldRef Name='Status'/><Value Type='DateTime'></Value></Geq></Where></Query></View>"
+$items = Get-PnPListItem -list "list" #-Query $query | Select-Object -Unique
 
 if($items.count -eq 0){
     WriteLog('[INFO] Problem with list or item retrieval. Either list is empty or items could not be retrieved')
@@ -41,10 +38,10 @@ if($members.count -eq 0){
 
 $contacts = $items | ForEach-Object {
     [PSCustomObject]@{
-        GivenName = $_.FieldValues.Vorname
-        Surname = $_.FieldValues.Nachname
-        businessPhones = $_.FieldValues.BusinessPhones
-        OfficeLocation = $_.FieldValues.Standort
+        GivenName = $_.FieldValues.field_4
+        Surname = $_.FieldValues.field_3
+        businessPhones = $_.FieldValues.Title
+        OfficeLocation = $_.FieldValues.field_5
         Status = $_.FieldValues.Status
     }
 }
@@ -77,22 +74,55 @@ foreach($member in $members){
         $stat = $contact.Status
 
         #filter method
-        $existingContact = Get-MgUserContactFolderContact -UserId $memberId -ContactFolderId $folderId -Filter "businessPhones/any(c: c eq '$($contact.businessPhones[0])')"
+        $existingContact = Get-MgUserContactFolderContact -UserId $memberId -ContactFolderId $folderId -Filter "businessPhones/any(a: eq '$($contact.businessPhones[0])')"
         if($null -eq $existingContact){
-            New-MgUserContactFolderContact -UserId $memberId -ContactFolderId $folderId -BodyParameter $params
-            WriteLog('[INFO] Created new contact, did not exist')
+            #New-MgUserContactFolderContact -UserId $memberId -ContactFolderId $folderId -BodyParameter $params
+
+            #WriteLog('[INFO] Created new contact, did not exist')
+
         } else {
-            #has choice field in sharepoint list called "status" with 2 choices for version control and filtering
+            # $oldParams = @{
+            #     givenName = $existingContact.GivenName
+            #     surname = $existingContact.Surname
+            #     emailAddresses = @(
+            #         @{
+            #             address = $existingContact.EmailAddresses
+            #             name = $contact.emailNames
+            #         }
+            #     )
+            #     businessPhones = @($existingContact.BusinessPhones)
+            #     CompanyName = $existingContact.CompanyName
+            #     Department = $existingContact.Department
+            #     OfficeLocation = $existingContact.OfficeLocation
+            #     categories = @("CAL Funktionsnummern")
+            # }
+
+            # $diff = Compare-Object -ReferenceObject $oldParams -DifferenceObject $params -Property * -PassThru
+            # #-CaseSensitive:$false
+
+            # if($diff){
+            #     Remove-MgUserContactFolderContact -UserId $memberId -ContactFolderId $folderId -ContactId $existingContact.Id
+            #     $msg = "[INFO] Updated contact $($existingContact.mobilePhone)"
+            #     New-MgUserContactFolderContact -userid $memberId -ContactFolderId $folderId -BodyParameter $params
+            #     WriteLog($msg)
+            # } else {
+            #     #do nothing
+            #     $msg = "[INFO] Contact up-to-date $($existingContact.mobilePhone)"
+            #     WriteLog($msg)
+            # }
+
             if($stat -eq "Updated"){
                 #remove contact
                 $msg = "[INFO] Updated contact $($existingContact.BusinessPhones)"
-                Remove-MgUserContactFolderContact -UserId $memberId -ContactFolderId -ContactId $existingContact.Id
-                New-MgUserContactFolderContact -userid $memberId -ContactFolderId $folderId -BodyParameter $params
+                # Remove-MgUserContactFolderContact -UserId $memberId -ContactFolderId -ContactId $existingContact.Id
+                # New-MgUserContactFolderContact -userid $memberId -ContactFolderId $folderId -BodyParameter $params
+                Write-Host("Updated Tag: "+$existingContact.GivenName+" "+$existingContact.Surname)
                 WriteLog($msg)
             }
             if($stat -eq "Deleted"){
                 $msg = "[INFO] Contact deleted $($existingContact.BusinessPhones)"
-                Remove-MgUserContactFolderContact -UserId $memberId -ContactFolderId -ContactId $existingContact.Id
+                # Remove-MgUserContactFolderContact -UserId $memberId -ContactFolderId -ContactId $existingContact.Id
+                Write-Host("Deleted Tag: "+$existingContact.GivenName+" "+$existingContact.Surname)
                 WriteLog($msg)
             }
         }
