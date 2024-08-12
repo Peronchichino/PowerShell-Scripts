@@ -1,112 +1,70 @@
-Connect-AzureAd
+<#
+.SYNOPSIS
+    IDK
+.DESCRIPTION
+    Parses a AD User's phone number, removing all extra characters from the string and leaving just the numbers and area code.
+.EXAMPLE
+    +43 (0110) - 11111 00011101 -> +4301101111100011101
+.OUTPUTS
+    The parsed number of the user is then assigned as the new number of the user in AD
+#>
 
-#new task: add domain to user (can see in email)
+function WriteLog{    
+    Param ([string]$logString)
+    $dateTime = "[{0:dd/MM/yy} {0:HH:mm:ss}]" -f (Get-Date)
+    if (-not (Test-Path -Path $csvLogging)) {Add-Content -Path $csvLogging -Value "Start CAL Contacts Logging"}
+    Add-content $csvLogging -value "$datetime $logString"
+}
 
-function func_user_set_TeamPhoneSettings([string] $UPN){
+$csvLogging = "x"
+
+
+$benchmark = [System.Diagnostics.Stopwatch]::StartNew()
+
+#TODO: refactor
+$groupId = "x"
+
+$bla = @("Buchmayer Lukas")
+$members = Get-AzureADGroupMember -ObjectId $groupId | Where-Object { $_.DisplayName -in $bla }
+
+if($members.count -eq 0){
+    WriteLog('[INFO] Problem with retrieving group or group is empty')
+    return
+}
+
+WriteLog('-------------------------------------------')
+WriteLog('[INIT] Script start run')
+WriteLog('-------------------------------------------')
+
+foreach($member in $members){
+    $memberDets = Get-AzureADUser -ObjectId $member.ObjectId
+    $memberId = $memberDets.UserPrincipalName
+
     try{
-        $user = Get-AzADUser -UserPrincipalName $UPN
 
-        $e5GroupDistinguishedName = "CN=,OU=,OU=,OU=,OU=,DC=,DC=,DC=,DC="
-        $e5members = Get-ADGroupMember -Identity $e5GroupDistinguishedName
+        #azure attributes for phone numbers: BusinessPhone -> TelephoneNumber; MobilePhone -> Mobile
+        if($member -ne $null){
+            $num = $($member.TelephoneNumber) -replace '[()\s-]', ''
+            Write-Host($num)
+            $domainbuff = $member.Mail -split '@'
+            if($domainbuff.Count -eq 2){
+                $domain = $domainbuff[1]
+            }
 
-        $isMember = $e5members | Where-Object { $_.UserPrincipalName -eq $UPN }
-        if ($user -ne $null) {
-            Write-Host "User's phone number: $($user.BusinessPhone)"
-            $num = $($user.BusinessPhone) -replace '[()\s-]', ''
-            Write-Host "After parse: $num"
-        } else {
-            Write-Host "User not found."
+            #change number
+            Set-AzureADUser -ObjectId $member.ObjectId -TelephoneNumber $num
+            $msg = "[INFO] Number parsed: $($memberId) -> $($num)"
+            WriteLog($msg)
         }
 
-        if ($isMember) {
-            Write-Host "$UPN is a member of E5."
-        } else {
-            Write-Host "$UPN is not a member of E5."
-        }
-
-        $splitEmailDomain = $user.Mail -split '@'
-        if($splitEmailDomain.Count -eq 2){
-            $domain = $splitEmailDomain[1]
-            Write-Host "Domain: $domain`r`n"
-        }
-
-    } catch{
+        Write-Host($memberId+": "+$num+" | "+$domain);
+    } catch {
         throw $_.Exception
     }
 }
 
-function func_group_set_TeamPhoneSettings([string]$group){
-    try{
-        Get-AzureADGroup -Filter "ObjectId eq '$group'"
 
-        if($group){
-            $groupMembers = Get-AzureADGroupMember -objectid $group 
-            $e5GroupDistinguishedName = "CN=,OU=,OU=,OU=,OU=,DC=,DC=,DC=,DC="
-            #$e5members = Get-AzureADGroupMember -objectid ""
-            $e5members = Get-ADGroupMember -Identity $e5GroupDistinguishedName
-
-            if ($groupMembers.Count -eq 0) {
-                Write-Host "No members found in the group: $groupName"
-                return
-            }
-
-            if($e5members.Count -eq 0){
-                Write-Host "Problem with retrieving E5 group"
-                return
-            }
-            
-            foreach($member in $groupMembers){
-                #$isInSpecificGroup = $e5members | Where-Object { $_.ObjectId -eq $member.ObjectId }
-                $isInSpecificGroup = $e5Members | Where-Object { $_.SamAccountName -eq $member.SamAccountName }
-                
-                if($isInSpecificGroup){
-                    $name = "$($member.DisplayName)(E5)"
-                } else {
-                    $name = "$($member.DisplayName)"
-                }
-
-                if($member.TelephoneNumber){
-                    $num = $($member.TelephoneNumber) -replace '[()\s-]', ''
-                    Write-Host "Name: $name, E-Mail: $($member.UserPrincipalName), Teams-Phone: $num"
-                } else {
-                    Write-Host "Name: $name, E-Mail: $($member.UserPrincipalName), Teams-Phone: --- NA ---"
-                }
-
-                $splitEmailDomain = $member.Mail -split '@'
-                if($splitEmailDomain.Count -eq 2){
-                    $domain = $splitEmailDomain[1]
-                    Write-Host "Domain: $domain`r`n"
-                }
-        }
-        }
-    } catch{
-        throw $_.Exception
-    }
-}
-
-Write-Host @"
-Key to getting user or group"
--Group -> g
--User -> u
-"@
-
-[string]$in = Read-Host -Prompt "User or group"
-
-switch($in){
-    g {
-        $choice = Read-Host -Prompt "Enter group ID"
-        func_group_set_TeamPhoneSettings($choice)
-        break
-    }
-    u {
-        $choice = Read-Host -Prompt "User email"
-        func_user_set_TeamPhoneSettings($choice)
-        break
-    }
-    default{
-        Write-Host "Input is not valid"
-        return
-    }
-}
-
-Disconnect-AzureAD
+$benchmark.Stop()
+$time = "[Benchmark] $($benchmark.ElapsedMilliseconds) ms"
+WriteLog($time)
+WriteLog('-------------------------------------------')
