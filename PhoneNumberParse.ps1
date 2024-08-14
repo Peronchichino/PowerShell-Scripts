@@ -1,15 +1,30 @@
 <#
 .SYNOPSIS
-    IDK
+    Removes special characters from business phone number from user and applies various policies.
 .DESCRIPTION
-    Parses a AD User's phone number, removing all extra characters from the string and leaving just the numbers and area code.
+    From a specified group via parameter input, all users' in group get their phone number chaned, i.e. the special characters removed.
+    Additionally, phone direct routing is enabled.
+    The following policies are also enabled: (add these accordingly)
+    Users are also checked to see if they are part of the E5 group, aka if they have an E5 license-
+.PARAMETER groupId
+    Object ID of group who's members should get their numbers parsed and policies assigned/applied
+    Type = String
+    Expected Value Format = xxxxyyyy-xxxx-yyyy-xxxxyyyy
 .EXAMPLE
-    +43 (0110) - 11111 00011101 -> +4301101111100011101
+    .\PhoneParseV2.ps1 xxxxxxxx
+.EXAMPLE
+    .\PhoneParseV2.ps1
+    groupId:xxxxxxx
 .OUTPUTS
-    The parsed number of the user is then assigned as the new number of the user in AD
+    The parsed number of the user is then assigned as the new number in AD and the various policies are assigned/applied
 #>
 
-#todo: e5 + active filter, parameter for exec (object), 
+#todo: active filter, parameter for exec (object), 
+
+Param(
+    [Parameter(Position=0,mandatory=$true)]
+    [string]$groupId
+)
 
 function WriteLog{    
     Param ([string]$logString)
@@ -21,8 +36,6 @@ function WriteLog{
 $csvLogging = "x"
 
 $benchmark = [System.Diagnostics.Stopwatch]::StartNew()
-
-$groupId = "x"
 
 $bla = @("Buchmayer Lukas")
 $members = Get-AzureADGroupMember -ObjectId $groupId | Where-Object { $_.DisplayName -in $bla }
@@ -49,20 +62,17 @@ foreach($member in $members){
                 Set-AzureADUser -ObjectId $member.ObjectId -TelephoneNumber $num
 
                 Set-CsPhoneNumberAssignment -Identity $memberId -PhoneNumber $num -PhoneNumberType DirectRouting
-                Get-CsOnlineUser $memberId | Grant-CsOnlineVoiceRoutingPolicy -PolicyName "CAL_VRP_INT"
-                Get-CsOnlineUser $memberId | Grant-CsTenantDialPlan -PolicyName "CAL DP 79070"
-                Get-CsOnlineUser $memberId | Set-CsTeamsCallingPolicy -Policyname "General - no forwarding to external numbers"
+                Get-CsOnlineUser $memberId | Grant-CsOnlineVoiceRoutingPolicy -PolicyName "xx"
+                Get-CsOnlineUser $memberId | Grant-CsTenantDialPlan -PolicyName "xx"
+                Get-CsOnlineUser $memberId | Set-CsTeamsCallingPolicy -Policyname "xx"
                 
-                $msg = "[INFO] Number parsed: $($memberId) (E5) -> $($num)"
+                $msg = "[INFO] Number parsed: $($memberId) (E5) -> $($num), policies applied"
                 WriteLog($msg)
                 Write-Host($msg)
             }
 
         }
 
-        $msg = "[RES] $($memberId): $($num), | $($domain)"
-        WriteLog($msg)
-        Write-Host($msg)
     } catch {
         throw $_.Exception
     }
