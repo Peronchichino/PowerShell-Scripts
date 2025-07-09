@@ -142,8 +142,8 @@ foreach($member in $members){
     if($hasE5){
         # continue with import
 
-    } else [
+    } else {
         #skip contact
         continue
-    ]
+    }
 }
